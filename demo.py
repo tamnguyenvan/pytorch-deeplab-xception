@@ -1,12 +1,16 @@
 import os
 import torch
 import argparse
-from datasets.utils import decode_seg_map_sequence
+from torchvision import transforms
+from PIL import Image
+from dataloaders.utils import decode_seg_map_sequence
+
+from modeling.deeplab import *
 
 
-input_transform = transform.Compose([
-    transform.ToTensor(),
-    transform.Normalize([.485, .456, .406], [.229, .224, .225])])
+input_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize([.485, .456, .406], [.229, .224, .225])])
 
 
 def load_image(filename, size=None, scale=None, keep_asp=True, transform=input_transform):
@@ -30,17 +34,25 @@ def main():
     # Load model
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     checkpoint = torch.load(args.model, map_location=device)
+    model = DeepLab(num_classes=14,
+                        backbone='resnet',
+                        output_stride=16,
+                        sync_bn=None,
+                        freeze_bn=False)
     model.load_state_dict(checkpoint['state_dict'])
+    model.to(device)
+    model.eval()
     
     # Load image
     img = load_image(args.source).to(device).unsqueeze(0)
     
     # Make prediction
-    output = model.evaluate(img)
+    output = model(img)
     predict = torch.max(output, 1)[1].cpu().numpy()
 
     # Get color pallete for visualization
     mask = decode_seg_map_sequence(predict, 'nyuv2')
+    maks = mask.cpu().detach().numpy()
     mask.save('output.png')
     
 
