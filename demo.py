@@ -1,6 +1,9 @@
 import os
 import torch
 import argparse
+
+import cv2
+import numpy as np
 from torchvision import transforms
 from PIL import Image
 from dataloaders.utils import decode_seg_map_sequence
@@ -50,15 +53,21 @@ def main():
     output = model(img)
     predict = torch.max(output, 1)[1].cpu().numpy()
 
-    # Get color pallete for visualization
-    mask = decode_seg_map_sequence(predict, 'nyuv2')
-    maks = mask.cpu().detach().numpy()
-    mask.save('output.png')
+    floor_mask = np.squeeze(predict)
+
+    img_origin = cv2.imread(args.source)
+    h, w = img_origin.shape[:2]
+    floor_img = cv2.resize(cv2.imread(args.floor), (w, h))
+    img_origin[floor_mask == 5] = 0
+    floor_img[floor_mask != 5] = 0
+    output = img_origin + floor_img
+    cv2.imwrite('output.png', output)
     
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('DeepLabv3+ demo')
     parser.add_argument('--source', type=str, help='Path to image source')
+    parser.add_argument('--floor', type=str, help='Path to floor image.')
     parser.add_argument('--model', type=str, help='Path to saved model file')
     args = parser.parse_args()
     print(args)
